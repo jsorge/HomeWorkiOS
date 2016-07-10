@@ -22,11 +22,16 @@
     class ViewController: UIViewController, myIAPManagerDelegate{
         
         private var batteries = [Battery]()
+        
+        //This doesn't see safe to me. What if it gets nilled out somehow?
         var IAPManagerInstance:IAPManager!
         
         //IBOutlets
         
         @IBOutlet weak var tableView: UITableView!
+        
+        //What if there isn't a selected index path? I would stay away from leaning heavily on implicitly unwrapped optionals. Use them with caution.
+        //The only place that I personally use them is in IBOutlets. There are cases to be made either way in using them, but if you load up a view and it crashes because it found nil in an outlet, that's an easy fix. But if a user crashes because of some edge case where this variable is nil, that's a whole new app release before it gets fixed to the user.
         var selectedProductIndex: NSIndexPath!
         
         
@@ -40,6 +45,8 @@
             
             IAPManagerInstance = IAPManager()
             IAPManagerInstance.delegate = self
+            
+            //If this is the method that you want to use to fetch the available batteries for purchase, that is fine. However, I would advise adding some loading state to the view. If the network needs to get hit, then you could have some latency and waiting for the the UI to update. That isn't a good experience for the user without them knowing that something is happening.
             IAPManagerInstance.requestProductInfo()
             
         }
@@ -50,16 +57,25 @@
         //MARK:
         func didReceiveBatteryList(batteryList: [batteryTuple]?) {
             var tempBatteryList = [Battery]()
+            
+            //If the batteryList is nil, this will crash
+            //You could simplify this whole call by first guarding that your battery list is not nil, otherwise remove all the batteries from your batteris array
+            //Then map all of the tuples in the batteryList to your batteries array. Like so:
+            //batteries = batteryList.map { (batterySource) -> Battery in return Battery(BatteryID: batterySource.batteryID, name: batterySource.batteryName, count: 0) }
             for batteryItem in batteryList!{
                 tempBatteryList.append(Battery(BatteryID: batteryItem.batteryID, name: batteryItem.batteryName, count: 0))
             }
             batteries = tempBatteryList
+            
+            //Since this is a delegate callback, is it guaranteed to be on the main thread? You could get a crash if it isn't
             tableView.reloadData()
         }
         
         
         func didCompleteTransactionWithError(error: NSError?) {
+            //This is a great candidate for a guard on the error
             if(error == nil){
+                //You don't need to get the cell out if you are reloading the row later in this method. All you should need to do here is
                 guard let cell = tableView.cellForRowAtIndexPath(selectedProductIndex) as? BatteryTableViewCell else { fatalError() }
                 
                 
@@ -80,7 +96,7 @@
         //MARK: - Action Sheet
         //MARK:
         func showActions() {
-            
+            //I like that you are asking for confirmation to buy the battery, but it might be nice to give the specific battery being purchased
             let actionSheetController = UIAlertController(title: "IAPDemo", message: "What do you want to do?", preferredStyle: UIAlertControllerStyle.ActionSheet)
             
             let buyAction = UIAlertAction(title: "Buy", style: UIAlertActionStyle.Default) { (action) -> Void in
@@ -148,6 +164,8 @@
             tableView.deselectRowAtIndexPath(indexPath, animated: true)
             selectedProductIndex = indexPath
             showActions()
+            
+            //This call isn't needed since your first call was to deselectRowAtIndexPath. That will handle the selection state of the cell
             tableView.cellForRowAtIndexPath(indexPath)?.selected = false
             
         }
